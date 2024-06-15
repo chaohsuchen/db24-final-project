@@ -83,10 +83,12 @@ public abstract class RemoteTerminalEmulator<T extends BenchTransactionType> ext
 	}
 	
 	private TxnResultSet executeTxnCycle(SutConnection conn) {
-		T txType = getNextTxType();
-		TransactionExecutor<T> executor = getTxExeutor(txType);
-		if (executor instanceof AnnTxExecutor)
-			((AnnTxExecutor) executor).setWarmingUp(isWarmingUp);
-		return executor.execute(conn);
-	}
+	  	T txType = getNextTxType();
+	  	TransactionExecutor<T> executor = getTxExeutor(txType);
+		if (executor instanceof SiftTxExecutor )
+		   ((SiftTxExecutor) executor).setWarmingUp(isWarmingUp);
+		if (executor instanceof AnnTxExecutor )
+		   ((AnnTxExecutor) executor).setWarmingUp(isWarmingUp);
+	  	return executor.execute(conn);
+ 	}
 }
