@@ -21,8 +21,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
+import java.util.Set;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 
 import org.vanilladb.core.query.algebra.Plan;
 import org.vanilladb.core.query.algebra.Scan;
@@ -169,12 +171,25 @@ public class TopKPlan implements Plan {
             if (pq.size() > limit)
                 pq.poll();
         }
-        while (pq.size() < limit) {
-            // pq沒滿20個的話補到20個，不然會報錯。
-            siftRecord rec = new siftRecord();
-            rec.dist = distFn.distance((VectorConstant) src.getVal(sortFlds.get(0)));
-            rec.idx = (IntegerConstant) src.getVal("i_id");
-            pq.add(rec);
+        if (pq.size() < limit) {
+            Set<Integer> nearestNeighbors = new HashSet<>();
+            Object[] recArr = (Object[]) pq.toArray();
+            for (Object rec : recArr) {
+                nearestNeighbors.add((Integer) ((siftRecord) rec).idx.asJavaVal());
+            }
+            int idx = 0;
+            while (pq.size() < limit) {
+                // pq沒滿20個的話補到20個，不然會報錯。
+                if (nearestNeighbors.contains(idx)) {
+                    idx++;
+                    continue;
+                }
+                siftRecord rec = new siftRecord();
+                rec.dist = idx;
+                rec.idx = new IntegerConstant(idx);
+                pq.add(rec);
+                idx++;
+            }
         }
 
         src.close();

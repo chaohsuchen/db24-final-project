@@ -60,8 +60,8 @@ def main(file_path, num_items, n_clusters, batch_size, output_dir):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='K-means clustering with MiniBatchKMeans')
     parser.add_argument('--file_path', type=str, default="sift.txt", help='Path to the input data file')
-    parser.add_argument('--num_items', type=int, default=9000, help='Path to the input data file')
-    parser.add_argument('--n_clusters', type=int, default=360, help='Number of clusters for K-means')
+    parser.add_argument('--num_items', type=int, default=900, help='Path to the input data file')
+    parser.add_argument('--n_clusters', type=int, default=30, help='Number of clusters for K-means')
     parser.add_argument('--batch_size', type=int, default=10000, help='Batch size for MiniBatchKMeans')
     parser.add_argument('--output_dir', type=str, default='clusters_output', help='Directory to save output files')
     
