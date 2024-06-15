@@ -316,7 +316,8 @@ public class IVFIndex extends Index {
 	@Override
 	public void delete(SearchKey key, RecordId dataRecordId, boolean doLogicalLogging) {
 		// search the position
-		throw new RuntimeException("public void delete");
+        return;
+		// throw new RuntimeException("public void delete");
 	}
 
 	/**
