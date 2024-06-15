@@ -292,7 +292,7 @@ public class Parser {
 			lex.eatKeyword("limit");
 			limit = (int) lex.eatNumericConstant();
 		}
-		
+
 		return new QueryData(isExplain, projs.asStringSet(), tables, pred,
 				groupFields, projs.aggregationFns(), sortFields, sortDirs, embFields, limit);
 	}
@@ -396,8 +396,6 @@ public class Parser {
 				: new ConstantExpression(constant());
 	}
 
-	
-
 	/*
 	 * Methods for parsing sort.
 	 */
@@ -424,6 +422,9 @@ public class Parser {
 					}
 					lex.eatDelim('>');
 
+					// 取得要 query 的 vector ，並將其記錄在 distFn
+					// ，之可通過distFn.distance(other vector) 計算之間的距離
+					// embFields != null 代表在做 vector query
 					VectorConstant queryVec = new VectorConstant(lex.eatVectorConstant());
 					distFn.setQueryVector(queryVec);
 					embFields.add(distFn);
@@ -640,12 +641,12 @@ public class Parser {
 		lex.eatDelim('(');
 		List<String> fldNames = idList();
 		lex.eatDelim(')');
-		
+
 		// Index type
 		IndexType idxType = DEFAULT_INDEX_TYPE;
 		if (lex.matchKeyword("using")) {
 			lex.eatKeyword("using");
-			
+
 			if (lex.matchKeyword("hash")) {
 				lex.eatKeyword("hash");
 				idxType = IndexType.HASH;
@@ -655,10 +656,13 @@ public class Parser {
 			} else if (lex.matchKeyword("lsh")) {
 				lex.eatKeyword("lsh");
 				idxType = IndexType.LSH;
+			} else if (lex.matchKeyword("ivf")) {
+				lex.eatKeyword("ivf");
+				idxType = IndexType.IVF;
 			} else
 				throw new UnsupportedOperationException();
 		}
-		
+
 		return new CreateIndexData(idxName, tblName, fldNames, idxType);
 	}
 

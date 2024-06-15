@@ -3,6 +3,10 @@ package org.vanilladb.bench.server.procedure.sift;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -10,14 +14,26 @@ import org.vanilladb.bench.benchmarks.sift.SiftBenchConstants;
 import org.vanilladb.bench.server.param.sift.SiftTestbedLoaderParamHelper;
 import org.vanilladb.bench.server.procedure.StoredProcedureUtils;
 import org.vanilladb.core.server.VanillaDb;
+import org.vanilladb.core.sql.IntegerConstant;
+import org.vanilladb.core.sql.VectorConstant;
 import org.vanilladb.core.sql.storedprocedure.StoredProcedure;
+import org.vanilladb.core.storage.index.Index;
+import org.vanilladb.core.storage.index.SearchKey;
+import org.vanilladb.core.storage.metadata.index.IndexInfo;
 import org.vanilladb.core.storage.tx.Transaction;
 import org.vanilladb.core.storage.tx.recovery.CheckpointTask;
 import org.vanilladb.core.storage.tx.recovery.RecoveryMgr;
+import org.vanilladb.core.util.CoreProperties;
+import org.vanilladb.core.storage.index.ivf.IVFIndex;
 
 public class SiftTestbedLoaderProc extends StoredProcedure<SiftTestbedLoaderParamHelper> {
     private static Logger logger = Logger.getLogger(SiftTestbedLoaderProc.class.getName());
-    
+    private static int NUM_CLUSTERS;
+    static {
+        NUM_CLUSTERS = CoreProperties.getLoader().getPropertyAsInteger(
+                IVFIndex.class.getName() + ".NUM_CLUSTERS", 9);
+    }
+
     public SiftTestbedLoaderProc() {
         super(new SiftTestbedLoaderParamHelper());
     }
@@ -36,11 +52,11 @@ public class SiftTestbedLoaderProc extends StoredProcedure<SiftTestbedLoaderPara
         // Generate item records
         generateItems(0);
 
-        // if (logger.isLoggable(Level.INFO))
-        //     logger.info("Training IVF index...");
-
-        // StoredProcedureUtils.executeTrainIndex(getHelper().getTableName(), getHelper().getIdxFields(), 
-        //     getHelper().getIdxName(), getTransaction());
+        if (logger.isLoggable(Level.INFO))
+            logger.info("Training IVF index...");
+        // 建 Index 要用的 table
+        executeTrainIndex(getHelper().getTableName(), getHelper().getIdxFields(),
+                getHelper().getIdxName(), getTransaction());
 
         if (logger.isLoggable(Level.INFO))
             logger.info("Loading completed. Flush all loading data to disks...");
@@ -73,13 +89,13 @@ public class SiftTestbedLoaderProc extends StoredProcedure<SiftTestbedLoaderPara
         for (String sql : paramHelper.getTableSchemas())
             StoredProcedureUtils.executeUpdate(sql, tx);
 
-        // if (logger.isLoggable(Level.INFO))
-        //     logger.info("Creating indexes...");
+        if (logger.isLoggable(Level.INFO))
+            logger.info("Creating indexes...");
 
-        // // Create indexes
-        // for (String sql : paramHelper.getIndexSchemas())
-        //     StoredProcedureUtils.executeUpdate(sql, tx);
-        
+        // Create indexes
+        for (String sql : paramHelper.getIndexSchemas())
+            StoredProcedureUtils.executeUpdate(sql, tx);
+
         if (logger.isLoggable(Level.FINE))
             logger.info("Finish creating schemas.");
     }
@@ -105,5 +121,60 @@ public class SiftTestbedLoaderProc extends StoredProcedure<SiftTestbedLoaderPara
         }
         if (logger.isLoggable(Level.FINE))
             logger.info("Finish populating items.");
+    }
+
+    // 根據 KNN 跑出來的 txt 內容創建 centroids 和 clusters 的 table
+    public void executeTrainIndex(String tblname, List<String> fldnames, String IdxName, Transaction tx) {
+        Set<IndexInfo> indexes = new HashSet<IndexInfo>();
+
+        int clusterNum = NUM_CLUSTERS;
+        int itemInClusterNum = SiftBenchConstants.NUM_ITEMS / clusterNum;
+
+        // 找找看在 DB 存的 IndexInfo 有沒有符合這個 tableName 和 FieldName 的。
+        List<IndexInfo> iis = VanillaDb.catalogMgr().getIndexInfo(tblname, fldnames.get(0), tx);
+        IndexInfo ii = iis.get(0);
+        IVFIndex idx = (IVFIndex) ii.open(tx);
+
+        // 插入 centroids
+        List<VectorConstant> vectorList = new ArrayList<VectorConstant>();
+        try (BufferedReader br = new BufferedReader(new FileReader("clusters_output\\centroids.txt"))) {
+            int line = 0;
+            String vectorString;
+
+            while (line < clusterNum && (vectorString = br.readLine()) != null) {
+                vectorList.add(new VectorConstant(vectorString));
+                line++;
+            }
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        idx.createCentroidTable(vectorList);
+
+        // 插入 clusters
+        for (int i = 0; i < clusterNum; i++) {
+            List<VectorConstant> vectorList_cluster = new ArrayList<VectorConstant>();
+            List<IntegerConstant> intList_cluster = new ArrayList<IntegerConstant>();
+            try (BufferedReader brVec = new BufferedReader(new FileReader("clusters_output\\cluster_" + i + ".txt"))) {
+                try (BufferedReader brIdx = new BufferedReader(
+                        new FileReader("clusters_output\\cluster_" + i + "_indices.txt"))) {
+
+                    String vectorString;
+                    String id;
+                    while ((vectorString = brVec.readLine()) != null && (id = brIdx.readLine()) != null) {
+                        vectorList_cluster.add(new VectorConstant(vectorString));
+                        intList_cluster.add(new IntegerConstant(Integer.parseInt(id)));
+                    }
+
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            idx.createClusterTable(intList_cluster, vectorList_cluster, i);
+
+        }
     }
 }
