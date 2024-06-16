@@ -1,8 +1,10 @@
 package org.vanilladb.bench.server.procedure.sift;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -13,6 +15,7 @@ import java.util.logging.Logger;
 import org.vanilladb.bench.benchmarks.sift.SiftBenchConstants;
 import org.vanilladb.bench.server.param.sift.SiftTestbedLoaderParamHelper;
 import org.vanilladb.bench.server.procedure.StoredProcedureUtils;
+import org.vanilladb.bench.util.BenchProperties;
 import org.vanilladb.core.server.VanillaDb;
 import org.vanilladb.core.sql.Int8VectorConstant;
 import org.vanilladb.core.sql.IntegerConstant;
@@ -30,9 +33,14 @@ import org.vanilladb.core.storage.index.ivf.IVFIndex;
 public class SiftTestbedLoaderProc extends StoredProcedure<SiftTestbedLoaderParamHelper> {
     private static Logger logger = Logger.getLogger(SiftTestbedLoaderProc.class.getName());
     private static int NUM_CLUSTERS;
+    private static int num_items;
+    private static int batch_size;
     static {
 		NUM_CLUSTERS = CoreProperties.getLoader().getPropertyAsInteger(
 				IVFIndex.class.getName() + ".NUM_CLUSTERS", 9);
+        num_items = BenchProperties.getLoader().getPropertyAsInteger(
+                SiftBenchConstants.class.getName() + ".NUM_ITEMS", 900);
+        batch_size = num_items / 90;
 	}
     public SiftTestbedLoaderProc() {
         super(new SiftTestbedLoaderParamHelper());
@@ -42,6 +50,41 @@ public class SiftTestbedLoaderProc extends StoredProcedure<SiftTestbedLoaderPara
     protected void executeSql() {
         if (logger.isLoggable(Level.INFO))
             logger.info("Start loading testbed...");
+        logger.info("Trying to call kmeans.py");
+
+        try {
+            // 定義 Python 腳本的路徑
+            String currDir = System.getProperty("user.dir");
+            String pythonScriptPath = currDir + File.separator + "kmeans.py";
+            System.out.println(pythonScriptPath);
+
+            String outputDir = currDir + File.separator + "clusters_output";
+            System.out.println(outputDir);
+            // 創建一個 ProcessBuilder 來運行 Python 腳本
+            ProcessBuilder processBuilder = new ProcessBuilder(
+                    "python", pythonScriptPath,
+                    "--num_items", String.valueOf(num_items),
+                    "--n_clusters", String.valueOf(NUM_CLUSTERS),
+                    "--batch_size", String.valueOf(batch_size),
+                    "--output_dir", outputDir);
+
+            // 啟動過程
+            Process process = processBuilder.start();
+
+            // 讀取 Python 腳本的輸出
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            String line;
+            while ((line = reader.readLine()) != null) {
+                System.out.println(line);
+            }
+
+            // 等待 Python 腳本執行完畢
+            int exitCode = process.waitFor();
+            System.out.println("Python script exited with code: " + exitCode);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 
         // turn off logging set value to speed up loading process
         RecoveryMgr.enableLogging(false);

@@ -21,6 +21,7 @@ import org.vanilladb.bench.BenchTransactionType;
 import org.vanilladb.bench.StatisticMgr;
 import org.vanilladb.bench.TxnResultSet;
 import org.vanilladb.bench.benchmarks.ann.rte.AnnTxExecutor;
+import org.vanilladb.bench.benchmarks.sift.rte.SiftTxExecutor;
 import org.vanilladb.bench.remote.SutConnection;
 
 public abstract class RemoteTerminalEmulator<T extends BenchTransactionType> extends Thread {
